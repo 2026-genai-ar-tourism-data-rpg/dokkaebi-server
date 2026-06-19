@@ -9,6 +9,8 @@ import { ConfigModule } from '@nestjs/config';
 
 import configuration from './config/configuration';
 import { AiModule } from './ai/ai.module';
+import { AuthModule } from './auth/auth.module';
+import { DialogueModule } from './dialogue/dialogue.module';
 import { HealthModule } from './health/health.module';
 import { MapModule } from './map/map.module';
 import { PartyModule } from './party/party.module';
@@ -19,6 +21,8 @@ import { UserModule } from './user/user.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+    AuthModule,
+    DialogueModule,
     HealthModule,
     UserModule,
     MapModule,
