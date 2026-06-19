@@ -11,6 +11,10 @@ export default () => ({
   databaseUrl:
     process.env.DATABASE_URL ?? 'postgresql://dokkaebi:dokkaebi@localhost:5432/dokkaebi',
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
+  // 게스트/토큰 서명 비밀키 (배포 시 반드시 env로 교체)
+  authSecret: process.env.AUTH_SECRET ?? 'dev-secret-change-me',
   // 게임서버 → AI 백엔드(dokkaebi-ai) 내부 호출 (compose 네트워크에선 http://ai:8001)
-  aiBaseUrl: process.env.AI_BASE_URL ?? 'http://localhost:8001',
+  // ⚠️ localhost 대신 127.0.0.1 — Node가 localhost를 IPv6(::1)로 풀어 uvicorn(IPv4)과
+  //    어긋나 AggregateError(ECONNREFUSED)가 나는 것 방지.
+  aiBaseUrl: process.env.AI_BASE_URL ?? 'http://127.0.0.1:8001',
 });
