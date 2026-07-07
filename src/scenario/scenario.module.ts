@@ -30,6 +30,7 @@ export class LatLngDto {
 /** 위시리스트 항목 — searchKeyword2 자동완성에서 확정한 content_id */
 export class WishItemDto {
   @ApiProperty() @IsString() content_id: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsString() name?: string;
   @ApiProperty({ required: false }) @IsOptional() @IsNumber() lat?: number;
   @ApiProperty({ required: false }) @IsOptional() @IsNumber() lng?: number;
   @ApiProperty({ required: false }) @IsOptional() @IsString() kind?: string;
@@ -55,8 +56,10 @@ export class GenerateScenarioDto {
   wishlist?: WishItemDto[];
 
   @ApiProperty({ required: false }) @IsOptional() @IsInt() budget?: number;
+  @ApiProperty({ required: false }) @IsOptional() @IsBoolean() no_meals?: boolean;
   @ApiProperty({ required: false }) @IsOptional() @IsString() region?: string;
   @ApiProperty({ required: false }) @IsOptional() @IsBoolean() with_dialogue?: boolean;
+  @ApiProperty({ required: false }) @IsOptional() @IsBoolean() with_content?: boolean;
 }
 
 /** 시나리오 생성. 입력 검증 → AI 백엔드 위임(노드선택·조립·대사). */
