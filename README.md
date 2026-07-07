@@ -1,48 +1,87 @@
 # dokkaebi-server
 
-> TourAPI 수집·저장, 퀘스트·유저·인증, Socket.io 실시간 동기화를 담당하는 핵심 백엔드.
+> 퀘스트·유저·인증, 실시간 멀티(Socket.io), TourAPI 노드 데이터를 담당하는 게임 백엔드. **NestJS(Node.js)** + Socket.io.
 
-API 서버와 실시간 서버를 같은 Node 런타임으로 묶어 한 컨테이너로 배포합니다.
+REST API와 실시간 서버를 같은 Node 런타임으로 묶어 한 컨테이너로 배포(핫패스). NPC 대사는 내부적으로 `dokkaebi-ai`로 프록시.
 
-## Clone
+---
+
+## 빠른 시작 (개발)
+
+> 요구: **Node.js 20+**
 
 ```bash
 git clone https://github.com/2026-genai-ar-tourism-data-rpg/dokkaebi-server.git
 cd dokkaebi-server
+
+npm install
+cp .env.example .env          # PORT·DB·Redis·AI_BASE_URL
+
+npm run start:dev             # 워치 모드 (nest start --watch)
+#  → http://localhost:8000/v1/health
+#  → Swagger UI: http://localhost:8000/docs
 ```
+
+> ⚠️ 호스트 포트 8000이 이미 점유돼 있으면 `.env`의 `PORT` 변경(예: 8088).
+
+### 빌드 / 실행
+
+```bash
+npm run build && npm start    # dist/main 실행
+```
+
+---
+
+## 디렉터리 구조
+
+```
+src/
+├── main.ts                 부팅 — 전역 prefix(v1)·ValidationPipe·Swagger(/docs)
+├── app.module.ts           루트 모듈 (도메인 모듈 조립)
+├── config/configuration.ts env(PORT·DATABASE_URL·REDIS_URL·AI_BASE_URL)
+├── health/                 GET /v1/health
+├── ai/                     ── AI 백엔드 프록시 ──
+│   └── ai.client.ts          POST {AI_BASE_URL}/v1/dialogue 호출
+├── quest/                  ── 게임 루프 (상태머신 ARRIVED→REWARDED) ──
+│   ├── quest.controller.ts   verify-location · dialogue · collect · complete
+│   ├── quest.service.ts      게임 로직(스텁)
+│   └── dto/quest.dto.ts      요청 검증(class-validator)
+├── party/                  ── 실시간 멀티 ──
+│   ├── party.controller.ts   POST /parties · /parties/:code/join
+│   ├── party.gateway.ts      Socket.io: party:join · fragment:collect · chat:message
+│   └── party.service.ts
+├── user/                   GET /v1/me (탐사등급·방문률·도감)
+├── map/                    GET /v1/regions/:id/nodes · /nodes/:id
+└── scenario/               POST /v1/scenarios/custom (맞춤 시나리오)
+```
+
+**API 계약**: 엔드포인트는 조직 `.github` 레포 `contracts/server-openapi.yaml` 과 1:1. 부팅 시 `/docs`(Swagger)로도 노출.
+
+**서버 ↔ AI**: `POST /v1/quests/:id/dialogue` → `AiClient` → `dokkaebi-ai POST /v1/dialogue`.
+
+---
 
 ## 스택
 
-- **런타임**: Node.js + NestJS (or Express)
-- **실시간**: Socket.io
-- **DB**: PostgreSQL (관광지·퀘스트·유저)
-- **캐시**: Redis (위치 데이터 캐싱 + 세션 + 멀티유저 룸 상태)
+- **런타임/프레임워크**: Node.js 20 + **NestJS** (모듈·DI·데코레이터)
+- **실시간**: Socket.io (`@nestjs/platform-socket.io`)
+- **DB/캐시**: PostgreSQL · Redis (룸 상태·랭킹·세션)
+- **문서**: `@nestjs/swagger` (/docs)
 
-## 책임 범위
+## 책임 범위 (요약)
 
-### 데이터 수집 및 저장
-- TourAPI **배치 수집 워커 + 실시간 조회** 병행
-- 수집 데이터 → DB 저장, 위치 데이터 → Redis 캐싱
-- API 장애 시 캐시 데이터로 서비스 유지(폴백)
+- 퀘스트·GPS 인증·보상, 유저 진행·도감, 맞춤/공용 시나리오
+- 실시간 멀티(4인 파티·조각 동기화·랭킹·채팅) — **조각 중복방지·랭킹은 Redis 원자처리**
+- TourAPI 노드 데이터 조회(+수집 워커는 배치)
+- NPC 대사는 `dokkaebi-ai` 프록시
 
-### 게임 구조로 변환
-- 관광지 좌표(mapX, mapY) → 퀘스트 마커 / AR 인터랙션 트리거 기준점
-- 카테고리 코드 → 관광지 유형별 퀘스트 자동 분류
-- 행사·축제 기간 데이터 → 시즌 한정 퀘스트 자동 생성 및 만료
+## 코딩 컨벤션 (이 레포 필수)
 
-### 게임 로직
-- GPS 반경 진입 검증
-- 방문 혼잡도 기반 보상 가중치 (저방문 관광지일수록 높은 보상)
+- 파일 헤더 주석 `[v1]`·역할·파이프라인 위치·구현 요약·구현일
+- 모듈 최대 분리, 매직넘버/URL은 `config`로, 브랜치 `<기능>/<이름>/<버전>`(예: `base-pipeline/kys/v1`)→`dev` PR
+- 상세: 조직 `.github` 레포 `CONTRIBUTING.md` · `report/개발계획.md`
 
-### 실시간 멀티유저
-- Socket.io 동기화: 최대 4인 협력 파티, 단서 실시간 공유, 인게임 채팅
-- 경쟁 모드 랭킹·리더보드
+## 의존
 
-## 결합 방식
-
-NPC 대사·개인화 힌트·사이드퀘스트가 필요하면 [`dokkaebi-ai`](./dokkaebi-ai.md)를 **내부 HTTP**로 호출합니다.
-
-## 의존 레포
-
-- [`dokkaebi-ai`](./dokkaebi-ai.md) — 생성형 AI / NPC 서비스
-- [`dokkaebi-infra`](./dokkaebi-infra.md) — 배포·환경 설정
+- [`dokkaebi-ai`](https://github.com/2026-genai-ar-tourism-data-rpg/dokkaebi-ai) — NPC 대사 생성(내부 HTTP)
+- [`dokkaebi-infra`](https://github.com/2026-genai-ar-tourism-data-rpg/dokkaebi-infra) — compose·배포
