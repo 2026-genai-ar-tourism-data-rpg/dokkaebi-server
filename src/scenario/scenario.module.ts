@@ -3,7 +3,8 @@
 // pipeline: 게임 백엔드 / 시나리오 (앱 입력 → AI 노드선택·조립 위임)
 // 구현(요약): POST /scenarios/custom — 입력 contract DTO 검증 후 dokkaebi-ai로 프록시.
 //            (앵커+샛길·비인기 규칙은 AI 쪽 생성 로직, 추후) 아키텍처 5-6 입력 contract.
-// 구현일: 2026-06-10 (AI 연결: 2026-06-18) | 작성: kys
+//            DTO는 AI ScenarioGenRequest와 1:1로 맞춘다 — whitelist:true라 누락 필드는 유실됨.
+// 구현일: 2026-06-10 (AI 연결: 2026-06-18 · with_branching 추가: 2026-08-02) | 작성: kys
 // ============================================================
 import { Body, Controller, Get, Injectable, Module, Post, Query } from '@nestjs/common';
 import { ApiProperty, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -60,6 +61,10 @@ export class GenerateScenarioDto {
   @ApiProperty({ required: false }) @IsOptional() @IsString() region?: string;
   @ApiProperty({ required: false }) @IsOptional() @IsBoolean() with_dialogue?: boolean;
   @ApiProperty({ required: false }) @IsOptional() @IsBoolean() with_content?: boolean;
+
+  // 갈림길(route 분기) 생성 여부. 전역 ValidationPipe가 whitelist:true라
+  // 여기 없는 필드는 AI로 프록시되기 전에 조용히 잘려나간다 → 반드시 선언할 것(#6).
+  @ApiProperty({ required: false }) @IsOptional() @IsBoolean() with_branching?: boolean;
 }
 
 /** 시나리오 생성. 입력 검증 → AI 백엔드 위임(노드선택·조립·대사). */

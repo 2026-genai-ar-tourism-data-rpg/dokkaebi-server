@@ -24,17 +24,22 @@ export interface SearchCandidate {
   lng?: number;
 }
 
-/** dokkaebi-ai 시나리오 생성 결과 (ScenarioGenResponse) */
+/** dokkaebi-ai 시나리오 생성 결과 (ScenarioGenResponse와 1:1 대응) */
 export interface ScenarioResult {
   scenario_id: string;
   title: string;
   region: string;
   type: string;
   node_sequence: Record<string, unknown>[];
+  stone_total?: number | null;              // 기억석 조각 총수(식음 노드 제외)
   anchor_node_id: string | null;
   is_public: boolean;
   created_by?: string | null;
   budget?: number | null;
+  transport?: string;                       // 반경 산출 근거(ai#40)
+  wishlist_content_ids?: string[];          // 위시 앵커 content_id(ai#40)
+  is_branching?: boolean;                   // 갈림길 포함 여부(ai#24)
+  route_tree?: Record<string, unknown> | null;  // 분기 그래프. 선형이면 null
 }
 
 @Injectable()
