@@ -12,9 +12,12 @@ cd ../dokkaebi-infra && docker compose up -d postgres redis
 Docker 없이 로컬 설치를 쓴다면 compose와 같은 자격증명을 만들어 둔다:
 
 ```bash
-psql -d postgres -c "CREATE ROLE dokkaebi LOGIN PASSWORD 'dokkaebi';"
+psql -d postgres -c "CREATE ROLE dokkaebi LOGIN PASSWORD 'dokkaebi' CREATEDB;"
 psql -d postgres -c "CREATE DATABASE dokkaebi OWNER dokkaebi;"
-psql -d postgres -c "CREATE DATABASE dokkaebi_test OWNER dokkaebi;"   # 테스트용
+psql -d postgres -c "CREATE DATABASE dokkaebi_test OWNER dokkaebi;"   # 테스트 베이스
+
+# CREATEDB 권한이 필요한 이유: 테스트가 스위트별 DB(dokkaebi_test_quest 등)를
+# 자동 생성한다. 이미 역할을 만들었다면: ALTER ROLE dokkaebi CREATEDB;
 ```
 
 ## 2. 기동
@@ -35,8 +38,14 @@ npm test
 ```
 
 - `src/common/geo.spec.ts` — 거리·반경·이동속도 순수 함수 (DB 불필요)
-- `test/quest-loop.spec.ts` — 게임 루프 E2E. **`dokkaebi_test` DB 필요**, 매 실행마다 스키마를 드롭·재생성한다.
+- `test/quest-loop.spec.ts` · `core-modules.spec.ts` · `upstream-errors.spec.ts` — E2E.
+  **스위트마다 자기 DB를 쓴다**(`dokkaebi_test_quest` / `_core` / `_upstream`).
+  `globalSetup`이 없으면 만들어 준다 — 역할에 `CREATEDB` 권한이 필요하다.
   AI 백엔드는 스텁으로 대체하므로 네트워크·LLM 호출은 없다.
+
+> 하나의 DB를 공유하면 `dropSchema`/`synchronize`가 서로를 밟아 **간헐적으로** 깨진다
+> (실측: 같은 커밋이 통과 ↔ 10건 실패). `maxWorkers=1`로 직렬화해도 커넥션 정리
+> 타이밍 때문에 완전히 없어지지 않아 DB 자체를 분리했다. 분리 후 10회 연속 통과.
 
 > sqlite 인메모리로 대체하지 않은 이유: 드라이버 방언 차이를 sqlite가 가려서
 > Postgres에서만 깨지는 경우가 실제로 있었다(`timestamp` 매핑).

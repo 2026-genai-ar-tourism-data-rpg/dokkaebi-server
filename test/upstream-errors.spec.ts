@@ -19,9 +19,11 @@ import configuration from '../src/config/configuration';
 import { ENTITIES } from '../src/database/entities';
 import { ScenarioModule } from '../src/scenario/scenario.module';
 
+// 스위트 전용 DB — 하나를 공유하면 dropSchema/synchronize가 서로를 밟아 간헐 실패한다.
+// (globalSetup이 미리 만들어 둔다: test/setup-databases.js)
 const TEST_DB =
-  process.env.TEST_DATABASE_URL ??
-  'postgresql://dokkaebi:dokkaebi@localhost:5432/dokkaebi_test';
+  (process.env.TEST_DATABASE_URL ??
+    'postgresql://dokkaebi:dokkaebi@localhost:5432/dokkaebi_test') + '_upstream';
 
 const REQUEST_BODY = { user_id: 'u', start: { lat: 37.5796, lng: 126.977 } };
 
