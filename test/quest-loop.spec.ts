@@ -22,9 +22,11 @@ import { QuestModule } from '../src/quest/quest.module';
 import { RedisModule } from '../src/redis/redis.module';
 import { ScenarioModule } from '../src/scenario/scenario.module';
 
+// 스위트 전용 DB — 하나를 공유하면 dropSchema/synchronize가 서로를 밟아 간헐 실패한다.
+// (globalSetup이 미리 만들어 둔다: test/setup-databases.js)
 const TEST_DB =
-  process.env.TEST_DATABASE_URL ??
-  'postgresql://dokkaebi:dokkaebi@localhost:5432/dokkaebi_test';
+  (process.env.TEST_DATABASE_URL ??
+    'postgresql://dokkaebi:dokkaebi@localhost:5432/dokkaebi_test') + '_quest';
 
 // 노드 좌표 — 종로 실좌표 기반(경복궁 근처 2곳 + 멀리 떨어진 1곳)
 const N1 = { id: 'n1', lat: 37.5796, lng: 126.977 };

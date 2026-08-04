@@ -19,9 +19,11 @@ import { MapModule } from '../src/map/map.module';
 import { PartyModule } from '../src/party/party.module';
 import { UserModule } from '../src/user/user.module';
 
+// 스위트 전용 DB — 하나를 공유하면 dropSchema/synchronize가 서로를 밟아 간헐 실패한다.
+// (globalSetup이 미리 만들어 둔다: test/setup-databases.js)
 const TEST_DB =
-  process.env.TEST_DATABASE_URL ??
-  'postgresql://dokkaebi:dokkaebi@localhost:5432/dokkaebi_test';
+  (process.env.TEST_DATABASE_URL ??
+    'postgresql://dokkaebi:dokkaebi@localhost:5432/dokkaebi_test') + '_core';
 
 const SCENARIO = {
   scenario_id: 'scn_core_001',
