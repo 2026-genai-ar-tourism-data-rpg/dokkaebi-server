@@ -6,8 +6,9 @@
 //            DTO는 AI ScenarioGenRequest와 1:1로 맞춘다 — whitelist:true라 누락 필드는 유실됨.
 // 구현일: 2026-06-10 (AI 연결: 2026-06-18 · with_branching 추가: 2026-08-02) | 작성: kys
 // ============================================================
-import { Body, Controller, Get, Injectable, Module, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Injectable, Logger, Module, Post, Query } from '@nestjs/common';
 import { ApiProperty, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { Type } from 'class-transformer';
 import {
   IsArray,
@@ -21,6 +22,8 @@ import {
 
 import { AiClient, ScenarioResult, SearchCandidate } from '../ai/ai.client';
 import { AiModule } from '../ai/ai.module';
+import { Scenario } from '../database/entities';
+import { ScenarioStore } from './scenario.store';
 
 /** 좌표 (앱이 GPS/카카오로 해석해 넘김) */
 export class LatLngDto {
@@ -67,14 +70,29 @@ export class GenerateScenarioDto {
   @ApiProperty({ required: false }) @IsOptional() @IsBoolean() with_branching?: boolean;
 }
 
-/** 시나리오 생성. 입력 검증 → AI 백엔드 위임(노드선택·조립·대사). */
+/** 시나리오 생성. 입력 검증 → AI 백엔드 위임(노드선택·조립·대사) → 영속. */
 @Injectable()
 export class ScenarioService {
-  constructor(private readonly ai: AiClient) {}
+  private readonly logger = new Logger(ScenarioService.name);
 
-  /** 앱 입력을 그대로 AI에 전달해 시나리오 생성(서버는 얇은 프록시). */
+  constructor(
+    private readonly ai: AiClient,
+    private readonly store: ScenarioStore,
+  ) {}
+
+  /**
+   * 앱 입력을 그대로 AI에 전달해 시나리오 생성 후 저장.
+   * 저장은 필수다 — 퀘스트 GPS 판정이 여기 담긴 노드 좌표·반경을 읽는다(#8).
+   * 저장 실패가 생성 자체를 막지는 않되(플레이는 가능해야 함) 경고를 남긴다.
+   */
   async generate(dto: GenerateScenarioDto): Promise<ScenarioResult> {
-    return this.ai.generateScenario(dto as unknown as Record<string, unknown>);
+    const result = await this.ai.generateScenario(dto as unknown as Record<string, unknown>);
+    try {
+      await this.store.save(result as unknown as Record<string, unknown>);
+    } catch (e) {
+      this.logger.error(`시나리오 저장 실패(플레이 불가 상태): ${String(e)}`);
+    }
+    return result;
   }
 
   /** 관광지 이름 검색(앵커 자동완성). */
@@ -104,8 +122,9 @@ export class ScenarioController {
 }
 
 @Module({
-  imports: [AiModule],
+  imports: [AiModule, TypeOrmModule.forFeature([Scenario])],
   controllers: [ScenarioController],
-  providers: [ScenarioService],
+  providers: [ScenarioService, ScenarioStore],
+  exports: [ScenarioStore],   // 퀘스트가 노드 좌표·requires를 읽는다
 })
 export class ScenarioModule {}
