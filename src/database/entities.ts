@@ -166,5 +166,57 @@ export class DexEntry {
   discovered_at: Date;
 }
 
+/** 협력/경쟁 모드 — 조각을 나눠 먹는지, 경쟁하는지. */
+export type PartyMode = 'coop' | 'versus';
+
+/** 파티(멀티 플레이 방). 초대 코드로 입장한다. */
+@Entity('parties')
+export class Party {
+  @PrimaryGeneratedColumn('uuid')
+  party_id: string;
+
+  /** 초대 코드 — 사람이 불러줄 수 있게 짧게. 유니크. */
+  @Column({ type: 'varchar', length: 8, unique: true })
+  code: string;
+
+  @Column({ type: 'varchar', length: 64 })
+  region_id: string;
+
+  @Column({ type: 'varchar', length: 16, default: 'coop' })
+  mode: PartyMode;
+
+  /** 같이 돌 시나리오. 방 만들 때 안 정했으면 null. */
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  scenario_id: string | null;
+
+  @Column({ type: 'varchar', length: 64 })
+  host_user_id: string;
+
+  @CreateDateColumn()
+  created_at: Date;
+}
+
+/** 파티 참가자. (party, user) 유니크로 같은 사람이 두 번 안 들어간다. */
+@Entity('party_members')
+@Unique(['party_id', 'user_id'])
+export class PartyMember {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ type: 'varchar', length: 64 })
+  party_id: string;
+
+  @Column({ type: 'varchar', length: 64 })
+  user_id: string;
+
+  @Column({ type: 'varchar', length: 64 })
+  nickname: string;
+
+  @CreateDateColumn()
+  joined_at: Date;
+}
+
 /** 전체 엔티티 목록 — TypeORM 등록용 단일 소스. */
-export const ENTITIES = [User, Scenario, QuestRun, NodeVisit, FragmentCollect, DexEntry];
+export const ENTITIES = [
+  User, Scenario, QuestRun, NodeVisit, FragmentCollect, DexEntry, Party, PartyMember,
+];
