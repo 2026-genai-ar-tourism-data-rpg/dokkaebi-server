@@ -1,0 +1,26 @@
+# [v1] dokkaebi-server .gitignore (base-pipeline/kys/v1, 2026-06-10)
+
+# --- 의존성 ---
+node_modules/
+
+# --- 빌드 ---
+dist/
+build/
+
+# --- env / 시크릿 (예시는 추적) ---
+.env
+.env.*
+!.env.example
+
+# --- 로그 ---
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# --- 테스트/커버리지 ---
+coverage/
+
+# --- OS / IDE ---
+.DS_Store
+.vscode/
+.idea/
