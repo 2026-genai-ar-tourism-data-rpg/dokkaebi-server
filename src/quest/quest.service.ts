@@ -4,7 +4,8 @@
 // 구현(요약): run 시작 → 노드 GPS 인증(하버사인+반경+스푸핑) → 조각 획득(원자 선점+게이트)
 //            → 노드 완료(보상 트랜잭션·도감·다음 노드). 판정 수치는 전부 config.quest.
 //            v1은 전부 더미 반환이라 5km 밖에서도 인증됐다(이슈 #8).
-// 구현일: 2026-06-10 (실구현: 2026-08-02) | 작성: kys (quest-api/kys/v1)
+//            조각 중복 방지는 DB 유니크 제약 단독 — 근거는 collectFragment 주석 참고.
+// 구현일: 2026-06-10 (실구현: 2026-08-02 · 중복방지 일원화: 2026-08-04) | 작성: kys
 // ============================================================
 import {
   BadRequestException,
@@ -35,7 +36,6 @@ interface QuestRules {
   maxSpeedMps: number;
   lastFixTtlSec: number;
   speedCheckMinIntervalSec: number;
-  fragmentLockTtlSec: number;
   expPerFragment: number;
   expFinaleBonus: number;
 }
@@ -211,10 +211,9 @@ export class QuestService {
    * AR 기억석 조각 획득 [QUEST_ACTIVE].
    *
    * 게이트: 노드 GPS 인증 완료 → 노드 requires 충족 → 중복 아님.
-   * 중복 방지는 Redis 선점(멀티 동시 탭) + DB 유니크(최종 방어선) 이중.
+   * 중복 방지는 DB 유니크 제약 하나로 끝낸다 — 동시 요청도 DB가 직렬화해 준다.
    */
   async collectFragment(userId: string, runId: string, nodeId: string) {
-    const r = this.rules;
     const run = await this.ownedRun(userId, runId);
     const scenario = await this.store.get(run.scenario_id);
     const node = this.store.node(scenario, nodeId);
@@ -236,19 +235,21 @@ export class QuestService {
       throw new ForbiddenException(`아직 이르니라. 부족한 것: ${missing.join(', ')}`);
     }
 
-    // 게이트 3: 중복 획득 — Redis 선점 후 DB 유니크로 확정.
-    const got = await this.redis.acquireFragmentLock(runId, fragmentId, r.fragmentLockTtlSec);
-    if (!got) {
-      return this.collectResult(runId, scenario, fragmentId, true);
-    }
+    // 게이트 3: 중복 획득 — DB 유니크 제약이 유일한 정합성 근거다.
+    //
+    // 동시 insert는 선행 트랜잭션이 커밋될 때까지 DB가 대기시켰다가 충돌로 떨군다.
+    // 즉 이 지점을 지나면 행의 존재가 보장되므로 진행도를 세도 안전하다.
+    //
+    // ⚠️ 예전엔 Redis 선점에 실패하면 곧바로 반환했는데, 그러면 선행 insert가
+    //    커밋되기 전에 count가 돌아 progress=0이 나갔다(동시 5회 요청 실측).
+    //    "이미 획득했다"면서 진행도 0을 주면 앱이 조각 수를 잘못 그린다.
+    let already = false;
     try {
       await this.fragments.insert({ run_id: runId, node_id: nodeId, fragment_id: fragmentId });
     } catch {
-      // 유니크 충돌 = 이미 획득함(동시 요청/재시도).
-      return this.collectResult(runId, scenario, fragmentId, true);
+      already = true; // 유니크 충돌 = 이미 획득함(동시 요청/재시도)
     }
-
-    return this.collectResult(runId, scenario, fragmentId, false);
+    return this.collectResult(runId, scenario, fragmentId, already);
   }
 
   /** 조각 획득 응답 조립 — 실제 진행도를 센다(더미 고정값 아님). */

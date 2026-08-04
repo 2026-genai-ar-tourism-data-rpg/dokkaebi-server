@@ -1,9 +1,11 @@
 // ============================================================
-// [v1] Redis 서비스 — 조각 원자 선점 · 직전 위치 fix 보관
-// pipeline: 게임 백엔드 / 공통 인프라 (멀티 동시성 · 스푸핑 판정)
-// 구현(요약): SET NX로 조각 선점(멀티 4인 동시 탭 중복 방지), 직전 GPS fix를 TTL로 보관해
-//            이동속도 계산에 사용. Redis가 없거나 죽어도 게임을 막지 않는다(폴백=허용) —
-//            중복 방지 최종 방어선은 DB 유니크 제약이라 정합성은 유지된다.
+// [v2] Redis 서비스 — 직전 위치 fix 보관(스푸핑 판정)
+// pipeline: 게임 백엔드 / 공통 인프라 (스푸핑 판정)
+// 구현(요약): 직전 GPS fix를 TTL로 보관해 이동속도(스푸핑) 계산에 사용.
+//            Redis가 없거나 죽어도 게임을 막지 않는다 — 속도 검사만 생략된다.
+//            ⚠️ 조각 중복 방지는 여기서 하지 않는다. 예전엔 SET NX 선점을 썼는데,
+//            선점 실패 시 조기 반환하면 선행 insert 커밋 전에 진행도를 세어
+//            progress=0이 나갔다. 정합성 근거는 DB 유니크 제약 하나로 일원화했다.
 // 구현일: 2026-08-02 | 작성: kys (quest-api/kys/v1) · 이슈 #8
 // ============================================================
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
@@ -34,32 +36,6 @@ export class RedisService implements OnModuleDestroy {
     } catch (e) {
       this.logger.warn(`Redis 초기화 실패(폴백 동작): ${String(e)}`);
       this.client = null;
-    }
-  }
-
-  /**
-   * 조각 선점 시도. 처음 잡은 요청만 true.
-   * Redis가 없으면 true(허용) — DB 유니크 제약이 최종 방어선이므로 안전하다.
-   */
-  async acquireFragmentLock(runId: string, fragmentId: string, ttlSec: number): Promise<boolean> {
-    if (!this.client) return true;
-    try {
-      const res = await this.client.set(
-        `frag:${runId}:${fragmentId}`, '1', 'EX', ttlSec, 'NX',
-      );
-      return res === 'OK';
-    } catch {
-      return true; // Redis 장애 시 게임을 막지 않는다
-    }
-  }
-
-  /** 실패한 조각 획득의 선점을 되돌린다(재시도 가능하게). */
-  async releaseFragmentLock(runId: string, fragmentId: string): Promise<void> {
-    if (!this.client) return;
-    try {
-      await this.client.del(`frag:${runId}:${fragmentId}`);
-    } catch {
-      /* 폴백: TTL로 자동 만료 */
     }
   }
 
