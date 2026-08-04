@@ -35,10 +35,22 @@ export default () => ({
     lastFixTtlSec: parseInt(process.env.QUEST_LAST_FIX_TTL_SEC ?? '3600', 10),
     // 속도 검사를 건너뛰는 최소 간격(초) — 너무 촘촘한 fix는 GPS 오차로 과속 오판.
     speedCheckMinIntervalSec: parseFloat(process.env.QUEST_SPEED_MIN_INTERVAL_SEC ?? '3'),
-    // 조각 중복 획득 방지용 Redis 선점 락 TTL(초).
-    fragmentLockTtlSec: parseInt(process.env.QUEST_FRAGMENT_LOCK_TTL_SEC ?? '10', 10),
     // 보상: 조각 1개당 경험치 / 시나리오 완주(피날레) 보너스.
     expPerFragment: parseInt(process.env.QUEST_EXP_PER_FRAGMENT ?? '100', 10),
     expFinaleBonus: parseInt(process.env.QUEST_EXP_FINALE_BONUS ?? '500', 10),
+  },
+
+  // ── 성장(레벨·등급) ────────────────────────────────────────
+  progression: {
+    // 레벨 1칸에 필요한 경험치. 조각 5개 완주 = 1000exp ≈ 2레벨.
+    expPerLevel: parseInt(process.env.PROGRESSION_EXP_PER_LEVEL ?? '500', 10),
+  },
+
+  // ── 파티(멀티) ─────────────────────────────────────────────
+  party: {
+    // 한 파티 최대 인원. 기획 4인 협력 기준.
+    maxMembers: parseInt(process.env.PARTY_MAX_MEMBERS ?? '4', 10),
+    // 초대 코드 길이. 사람이 불러주기 쉬운 길이로.
+    codeLength: parseInt(process.env.PARTY_CODE_LENGTH ?? '4', 10),
   },
 });
