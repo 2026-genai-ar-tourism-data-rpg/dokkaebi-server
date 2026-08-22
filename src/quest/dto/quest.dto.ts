@@ -25,6 +25,8 @@ export class DialogueDto {
   @ApiProperty() @IsString() node_id: string;
   @ApiProperty({ default: '등장' }) @IsOptional() @IsString() stage?: string;
   @ApiProperty({ required: false }) @IsOptional() @IsString() user_input?: string;
+  /** 장소 표시명. 없으면 AI 프롬프트에 node_id가 장소명으로 박힌다. */
+  @ApiProperty({ required: false }) @IsOptional() @IsString() node_name?: string;
 }
 
 /** 노드 완료 요청 — 갈림길에서 고른 갈래(choice_id)를 함께 기록한다. */

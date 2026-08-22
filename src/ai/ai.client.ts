@@ -56,9 +56,16 @@ export class AiClient {
     nodeId: string,
     stage: string,
     playerState: Record<string, unknown> = {},
+    nodeName?: string,
   ): Promise<DialogueResult> {
     const url = `${this.config.get<string>('aiBaseUrl')}/v1/dialogue`;
-    const body = { node_id: nodeId, stage, player_state: playerState };
+    // node_name을 빼면 AI 프롬프트의 장소명·페르소나 이름이 node_id가 된다.
+    const body = {
+      node_id: nodeId,
+      stage,
+      player_state: playerState,
+      ...(nodeName ? { node_name: nodeName } : {}),
+    };
     const { data } = await firstValueFrom(this.http.post<DialogueResult>(url, body));
     return data;
   }
