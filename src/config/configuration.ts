@@ -22,6 +22,9 @@ export default () => ({
   // ⚠️ localhost 대신 127.0.0.1 — Node가 localhost를 IPv6(::1)로 풀어 uvicorn(IPv4)과
   //    어긋나 AggregateError(ECONNREFUSED)가 나는 것 방지.
   aiBaseUrl: process.env.AI_BASE_URL ?? 'http://127.0.0.1:8001',
+  // AI 호출 상한(ms). 시나리오 생성은 LLM 수십 회라 길게 잡되, 무한 대기는 막는다.
+  // (없으면 axios 기본=무제한 → AI가 멈추면 앱이 영원히 로딩 상태로 남는다)
+  aiTimeoutMs: parseInt(process.env.AI_TIMEOUT_MS ?? '120000', 10),
 
   // ── 게임 룰 (퀘스트 판정·보상) ──────────────────────────────
   quest: {
@@ -38,6 +41,16 @@ export default () => ({
     // 보상: 조각 1개당 경험치 / 시나리오 완주(피날레) 보너스.
     expPerFragment: parseInt(process.env.QUEST_EXP_PER_FRAGMENT ?? '100', 10),
     expFinaleBonus: parseInt(process.env.QUEST_EXP_FINALE_BONUS ?? '500', 10),
+  },
+
+  // ── 분기 대화 ──────────────────────────────────────────────
+  dialogue: {
+    // 노드별 대화 턴을 서버가 센다. 앱이 보내는 turn은 화면 지역변수라 재진입하면
+    // 0으로 돌아가 깊이상한이 무력화됐다(실측) → 서버 카운터로 덮어쓴다.
+    // Redis가 없으면 앱 값으로 폴백(게임을 막지 않는다).
+    turnTtlSec: parseInt(process.env.DIALOGUE_TURN_TTL_SEC ?? '3600', 10),
+    // 한 노드에서 허용할 최대 턴. 초과분은 AI가 수렴시키도록 그대로 올려 보낸다.
+    maxTurns: parseInt(process.env.DIALOGUE_MAX_TURNS ?? '3', 10),
   },
 
   // ── 성장(레벨·등급) ────────────────────────────────────────

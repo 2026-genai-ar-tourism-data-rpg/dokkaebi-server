@@ -73,6 +73,11 @@ export class QuestController {
   /** NPC 대화 — AI 백엔드로 프록시 (노드 단위) */
   @Post('quests/:questId/dialogue')
   dialogue(@Param('questId') questId: string, @Body() dto: DialogueDto) {
-    return this.ai.dialogue(dto.node_id, dto.stage ?? '등장', { user_input: dto.user_input });
+    return this.ai.dialogue(
+      dto.node_id,
+      dto.stage ?? '등장',
+      { user_input: dto.user_input },
+      dto.node_name,
+    );
   }
 }

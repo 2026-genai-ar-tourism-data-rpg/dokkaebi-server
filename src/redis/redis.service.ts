@@ -60,6 +60,31 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * 카운터 1 증가 후 현재 값 반환. Redis가 없으면 null(호출측이 폴백한다).
+   * 분기 대화 턴 수처럼 **클라이언트를 믿을 수 없는 값**을 서버가 세는 데 쓴다.
+   */
+  async incr(key: string, ttlSec: number): Promise<number | null> {
+    if (!this.client) return null;
+    try {
+      const n = await this.client.incr(key);
+      if (n === 1) await this.client.expire(key, ttlSec); // 첫 증가에만 TTL을 건다
+      return n;
+    } catch {
+      return null;
+    }
+  }
+
+  /** 카운터 삭제(대화가 끝나면 다음 방문을 위해 리셋). */
+  async del(key: string): Promise<void> {
+    if (!this.client) return;
+    try {
+      await this.client.del(key);
+    } catch {
+      /* 폴백: TTL로 알아서 사라진다 */
+    }
+  }
+
   /** 앱 종료 시 연결 정리(테스트가 열린 핸들로 매달리지 않도록). */
   async onModuleDestroy(): Promise<void> {
     try {
