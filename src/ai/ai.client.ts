@@ -24,6 +24,18 @@ export interface SearchCandidate {
   lng?: number;
 }
 
+/** 내 주변 POI 1개 (NearbyPlace) — 좌표 기반, 코스 생성 전 단계 */
+export interface NearbyPlace {
+  node_id: string;
+  name?: string;
+  addr?: string;
+  lat?: number;
+  lng?: number;
+  dist_m?: number;
+  /** historic | museum | artwork | viewpoint | park | attraction | other */
+  category?: string;
+}
+
 /** dokkaebi-ai 시나리오 생성 결과 (ScenarioGenResponse와 1:1 대응) */
 export interface ScenarioResult {
   scenario_id: string;
@@ -95,5 +107,21 @@ export class AiClient {
       }),
     );
     return data.candidates;
+  }
+
+  /** 내 주변 POI 목록(거리순)을 AI 백엔드로 위임 — "내 주변 탐험" 탭. */
+  async nearbyPlaces(
+    lat: number,
+    lng: number,
+    radiusM = 2000,
+    topN = 20,
+  ): Promise<NearbyPlace[]> {
+    const url = `${this.config.get<string>('aiBaseUrl')}/v1/nearby`;
+    const { data } = await firstValueFrom(
+      this.http.get<{ places: NearbyPlace[] }>(url, {
+        params: { lat, lng, radius_m: radiusM, top_n: topN },
+      }),
+    );
+    return data.places;
   }
 }
