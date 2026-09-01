@@ -34,6 +34,8 @@ export interface NearbyPlace {
   dist_m?: number;
   /** historic | museum | artwork | viewpoint | park | attraction | other */
   category?: string;
+  /** 장소 설명 한 줄 요약 (TourAPI overview 앞부분). 없으면 undefined. */
+  summary?: string;
 }
 
 /** dokkaebi-ai 시나리오 생성 결과 (ScenarioGenResponse와 1:1 대응) */
