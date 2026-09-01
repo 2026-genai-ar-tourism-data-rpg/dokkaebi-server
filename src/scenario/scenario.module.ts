@@ -28,10 +28,13 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-import { AiClient, ScenarioResult, SearchCandidate } from '../ai/ai.client';
+import { AiClient, NearbyPlace, ScenarioResult, SearchCandidate } from '../ai/ai.client';
 import { AiModule } from '../ai/ai.module';
 import { Scenario } from '../database/entities';
 import { ScenarioStore } from './scenario.store';
+
+/** "내 주변 탐험" 기본 반경(m) — AI 도보 코스 반경(scenario_radius_walk_m)과 맞춘다. */
+const DEFAULT_NEARBY_RADIUS_M = 2000;
 
 /** 좌표 (앱이 GPS/카카오로 해석해 넘김) */
 export class LatLngDto {
@@ -129,6 +132,11 @@ export class ScenarioService {
     if (!keyword?.trim()) return [];
     return this.ai.searchAttractions(keyword.trim());
   }
+
+  /** 내 주변 POI 목록(거리순) — 좌표만 있으면 되고 LLM을 안 타 즉시 응답. */
+  async nearby(lat: number, lng: number, radiusM?: number): Promise<NearbyPlace[]> {
+    return this.ai.nearbyPlaces(lat, lng, radiusM ?? DEFAULT_NEARBY_RADIUS_M);
+  }
 }
 
 @ApiTags('scenario')
@@ -147,6 +155,23 @@ export class ScenarioController {
   @Post('custom')
   custom(@Body() dto: GenerateScenarioDto) {
     return this.scenario.generate(dto);
+  }
+
+  /** 내 주변 탐험 — 현재 좌표 반경 내 POI(거리순). 예: /v1/scenarios/nearby?lat=..&lng=.. */
+  @Get('nearby')
+  @ApiQuery({ name: 'lat', required: true })
+  @ApiQuery({ name: 'lng', required: true })
+  @ApiQuery({ name: 'radius_m', required: false })
+  nearby(
+    @Query('lat') lat: string,
+    @Query('lng') lng: string,
+    @Query('radius_m') radiusM?: string,
+  ) {
+    return this.scenario.nearby(
+      Number(lat),
+      Number(lng),
+      radiusM ? Number(radiusM) : undefined,
+    );
   }
 }
 
