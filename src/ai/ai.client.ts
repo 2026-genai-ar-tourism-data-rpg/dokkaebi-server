@@ -24,6 +24,27 @@ export interface SearchCandidate {
   lng?: number;
 }
 
+/** 내 주변 POI 1개 (NearbyPlace) — 좌표 기반, 코스 생성 전 단계 */
+export interface NearbyPlace {
+  node_id: string;
+  name?: string;
+  addr?: string;
+  lat?: number;
+  lng?: number;
+  dist_m?: number;
+  /** historic | museum | artwork | viewpoint | park | attraction | other */
+  category?: string;
+  /** 장소 설명 한 줄 요약 (TourAPI overview 앞부분). 없으면 undefined. */
+  summary?: string;
+}
+
+/** 프롤로그 대본 한 줄 (PrologueLineSchema). speaker=beat면 text 없이 연출 트리거만. */
+export interface PrologueLine {
+  speaker: string;               // narration | npc | player | beat
+  text: string;
+  beat?: string | null;
+}
+
 /** dokkaebi-ai 시나리오 생성 결과 (ScenarioGenResponse와 1:1 대응) */
 export interface ScenarioResult {
   scenario_id: string;
@@ -40,6 +61,8 @@ export interface ScenarioResult {
   wishlist_content_ids?: string[];          // 위시 앵커 content_id(ai#40)
   is_branching?: boolean;                   // 갈림길 포함 여부(ai#24)
   route_tree?: Record<string, unknown> | null;  // 분기 그래프. 선형이면 null
+  /** 코스 오프닝 프롤로그 대본(화자 순서·연출 비트 고정, 대사만 region·첫 장소로 생성). */
+  prologue?: PrologueLine[];
 }
 
 @Injectable()
@@ -56,9 +79,16 @@ export class AiClient {
     nodeId: string,
     stage: string,
     playerState: Record<string, unknown> = {},
+    nodeName?: string,
   ): Promise<DialogueResult> {
     const url = `${this.config.get<string>('aiBaseUrl')}/v1/dialogue`;
-    const body = { node_id: nodeId, stage, player_state: playerState };
+    // node_name을 빼면 AI 프롬프트의 장소명·페르소나 이름이 node_id가 된다.
+    const body = {
+      node_id: nodeId,
+      stage,
+      player_state: playerState,
+      ...(nodeName ? { node_name: nodeName } : {}),
+    };
     const { data } = await firstValueFrom(this.http.post<DialogueResult>(url, body));
     return data;
   }
@@ -88,5 +118,21 @@ export class AiClient {
       }),
     );
     return data.candidates;
+  }
+
+  /** 내 주변 POI 목록(거리순)을 AI 백엔드로 위임 — "내 주변 탐험" 탭. */
+  async nearbyPlaces(
+    lat: number,
+    lng: number,
+    radiusM = 2000,
+    topN = 20,
+  ): Promise<NearbyPlace[]> {
+    const url = `${this.config.get<string>('aiBaseUrl')}/v1/nearby`;
+    const { data } = await firstValueFrom(
+      this.http.get<{ places: NearbyPlace[] }>(url, {
+        params: { lat, lng, radius_m: radiusM, top_n: topN },
+      }),
+    );
+    return data.places;
   }
 }
