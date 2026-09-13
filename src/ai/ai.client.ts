@@ -3,6 +3,15 @@
 // pipeline: 게임 백엔드 → AI 백엔드 내부 호출 (server ↔ ai)
 // 구현(요약): POST {AI_BASE_URL}/v1/dialogue · /v1/scenarios 호출
 // 구현일: 2026-06-10 (시나리오 추가: 2026-06-18) | 작성: kys
+// ------------------------------------------------------------
+// [v2] 장소 검색에서 후보 수(top_n=8)를 박아 보내지 않는다.
+// 구현(요약): dokkaebi-ai가 검색 기본 후보 수를 8 → 30(scenario_search_top_n)으로 올렸는데,
+//            여기서 매번 top_n=8을 명시해 보내 AI 기본값이 적용되지 않았다
+//            (AI는 `top_n or 설정값`이라 값을 받으면 그 값을 쓴다). 관광공사 이름 검색은 위치를
+//            모르기 때문에 "공원·카페"처럼 흔한 검색어는 전국에서 8건만 받아오고, 앱이 그중
+//            반경 안만 남기므로 근처 장소가 후보 8건 밖으로 밀려 아예 안 보였다.
+//            → top_n을 보내지 않아 AI 설정값을 따르게 한다(개수의 기준은 AI 한 곳에 둔다).
+// 구현일: 2026-09-13 | 작성: ljs (search-top-n/ljs/v1)
 // ============================================================
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
@@ -109,12 +118,15 @@ export class AiClient {
     return data;
   }
 
-  /** 관광지 이름 검색(앵커 자동완성)을 AI 백엔드로 위임. */
-  async searchAttractions(keyword: string, topN = 8): Promise<SearchCandidate[]> {
+  /**
+   * 관광지 이름 검색(앵커 자동완성)을 AI 백엔드로 위임.
+   * 후보 수(top_n)는 보내지 않는다 — AI 설정(scenario_search_top_n)이 기준이다.
+   */
+  async searchAttractions(keyword: string): Promise<SearchCandidate[]> {
     const url = `${this.config.get<string>('aiBaseUrl')}/v1/search`;
     const { data } = await firstValueFrom(
       this.http.get<{ candidates: SearchCandidate[] }>(url, {
-        params: { keyword, top_n: topN },
+        params: { keyword },
       }),
     );
     return data.candidates;
