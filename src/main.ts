@@ -6,11 +6,18 @@
 //            운영에서는 배포 가드가 위험한 기본값을 검사하고, CORS를 좁히고,
 //            Swagger를 닫는다(계약 문서를 공개 노출하지 않는다).
 // 구현일: 2026-06-10 (예외 필터·바인딩: 2026-08-04 · 배포 가드: 2026-08-04) | 작성: kys
+// ------------------------------------------------------------
+// [v4] JSON 바디 한도 10MB — 촬영 미션 사진(base64) 때문.
+// 구현(요약): Nest 기본 파서는 100KB라 183KB 사진에서 PayloadTooLarge → 필터가 500으로 뭉갰다
+//            (2026-09-17 실측: 작은 더미는 정상, 실사진은 internal_error). 실기기 스냅샷은
+//            1~3MB(base64 ×1.33)이므로 기본 파서를 끄고 10MB 파서를 직접 등록한다.
+// 구현일: 2026-09-17 | 작성: kys (photo-verify/kys/v1)
 // ============================================================
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { json, urlencoded } from 'express';
 
 import { AppModule } from './app.module';
 import { UpstreamExceptionFilter } from './common/upstream-exception.filter';
@@ -18,7 +25,10 @@ import { assertProductionSafe } from './config/production-guard';
 
 /** 앱 생성 + 전역 설정 + 기동. */
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // bodyParser:false — 기본 100KB 파서가 먼저 걸리면 아래 한도 상향이 무의미하다.
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  app.use(json({ limit: '10mb' }));                      // 사진 검증(base64 JPEG) 수용
+  app.use(urlencoded({ extended: true, limit: '10mb' }));
   const config = app.get(ConfigService);
   const isProduction = (process.env.NODE_ENV ?? 'development') === 'production';
 
