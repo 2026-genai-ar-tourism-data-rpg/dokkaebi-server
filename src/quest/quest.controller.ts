@@ -70,6 +70,17 @@ export class QuestController {
     return this.quest.complete(user.sub, runId, nodeId, dto.choice_id);
   }
 
+  /**
+   * 촬영 미션 사진 판정 — AI 백엔드(비전 모델)로 프록시.
+   * user_id는 토큰에서 채운다(앱이 보낸 값은 믿지 않는다). 그 외 필드(target·ref_images·
+   * aliases·image_b64)는 그대로 넘긴다. Record 바디라 whitelist에 깎이지 않는다(dialogue/turn과 동일).
+   * 응답의 verified=null 은 '판정 불가' — 앱은 행위 완료로 폴백한다.
+   */
+  @Post('photos/verify')
+  verifyPhoto(@CurrentUser() user: TokenPayload, @Body() body: Record<string, unknown>) {
+    return this.ai.verifyPhoto({ ...body, user_id: user.sub, user_name: user.nickname });
+  }
+
   /** NPC 대화 — AI 백엔드로 프록시 (노드 단위) */
   @Post('quests/:questId/dialogue')
   dialogue(@Param('questId') questId: string, @Body() dto: DialogueDto) {

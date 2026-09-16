@@ -119,6 +119,19 @@ export class AiClient {
   }
 
   /**
+   * 촬영 미션 사진 판정을 AI 백엔드(비전 모델)로 위임.
+   * 사진(base64)이 커서 타임아웃을 넉넉히 준다 — AI 쪽 vision_timeout(25s)보다 길어야
+   * 진짜 결과 대신 게이트웨이 타임아웃이 먼저 나가는 일이 없다.
+   */
+  async verifyPhoto(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const url = `${this.config.get<string>('aiBaseUrl')}/v1/photo/verify`;
+    const { data } = await firstValueFrom(
+      this.http.post<Record<string, unknown>>(url, body, { timeout: 40_000 }),
+    );
+    return data;
+  }
+
+  /**
    * 관광지 이름 검색(앵커 자동완성)을 AI 백엔드로 위임.
    * 후보 수(top_n)는 보내지 않는다 — AI 설정(scenario_search_top_n)이 기준이다.
    */
