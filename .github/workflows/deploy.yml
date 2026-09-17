@@ -8,6 +8,14 @@
 # 구현일: 2026-08-31 | v2 2026-09-04: SG 동적 개방 추가
 #            (Actions 러너 IP가 매번 달라 22포트에서 "dial tcp :22: i/o timeout" 나던 문제)
 # 작성: kys (deploy-cicd/kys/v1)
+# ------------------------------------------------------------
+# [v3] .env는 git이 관리하지 않아(비밀 커밋 방지) EC2에 새 변수를 추가하려면
+#      수동 SSH가 필요했다 — SUPABASE_URL이 없으면 이메일·카카오·네이버
+#      로그인이 전부 토큰 검증에서 막힌다. 배포 스크립트에서 없을 때만
+#      추가하도록(멱등) 자동화 — push만으로 반영, SSH 불필요.
+#      SUPABASE_URL은 클라이언트 앱 코드에도 그대로 있는 공개 값이라
+#      워크플로우에 평문으로 둬도 된다(시크릿 아님).
+# 구현일: 2026-09-17 | 작성: jch (deploy-env-supabase/jch/v1)
 # ============================================================
 name: deploy-server
 
@@ -63,6 +71,8 @@ jobs:
             cd ~/dokkaebi/dokkaebi-server
             git fetch origin main
             git reset --hard origin/main
+            # .env는 git 대상이 아니라 reset으로 안 건드려짐 — 없는 값만 추가(멱등).
+            grep -q '^SUPABASE_URL=' .env || echo 'SUPABASE_URL=https://gkzewjrjexmodgqtuban.supabase.co' >> .env
             cd ~/dokkaebi/dokkaebi-infra
             docker compose -f docker-compose.prod.yml up -d --build server
             # Caddy 경유 공개 헬스체크 (경로는 /v1/health — /health 아님)
