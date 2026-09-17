@@ -18,6 +18,9 @@ export default () => ({
   authSecret: process.env.AUTH_SECRET ?? 'dev-secret-change-me',
   // 토큰 유효기간(초). 기본 30일 — 게스트가 여행 중 재로그인하지 않도록 넉넉히.
   authTokenTtlSec: parseInt(process.env.AUTH_TOKEN_TTL_SEC ?? '2592000', 10),
+  // Supabase Auth 프로젝트 URL — 세션 토큰 서명 검증용 JWKS를 여기서 받아온다.
+  // 비밀키가 아니라 공개 URL이라 서버가 별도 비밀 없이 자체 검증 가능(비대칭 서명).
+  supabaseUrl: process.env.SUPABASE_URL ?? '',
   // 게임서버 → AI 백엔드(dokkaebi-ai) 내부 호출 (compose 네트워크에선 http://ai:8001)
   // ⚠️ localhost 대신 127.0.0.1 — Node가 localhost를 IPv6(::1)로 풀어 uvicorn(IPv4)과
   //    어긋나 AggregateError(ECONNREFUSED)가 나는 것 방지.
