@@ -5,20 +5,40 @@
 //            verify()가 서명·만료를 검사해 payload 반환 → AuthGuard가 req.user 주입.
 //            의존성 없이 crypto로 서명(MVP). 카카오/구글은 같은 골격에 추가 예정.
 // 구현일: 2026-06-18 (영속·검증 추가: 2026-08-02) | 작성: kys (auth-guest/kys/v1) · 이슈 #8
+// ------------------------------------------------------------
+// [v3] POST /auth/supabase 추가 — Supabase Auth(이메일 등)로 로그인하면
+//      같은 user_id로 재로그인돼 진행도가 이어진다(게스트는 매번 새 user_id).
+//      토큰 발급·검증 골격은 게스트와 동일, 신원 확인만 SupabaseAuthService로 위임.
+// 구현일: 2026-09-17 | 작성: jch (supabase-auth-bridge/jch/v1)
 // ============================================================
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 
-import { Body, Controller, Injectable, Module, Post } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
+import { Body, Controller, Injectable, Module, Post, UnauthorizedException } from '@nestjs/common';
 import { ApiProperty, ApiTags } from '@nestjs/swagger';
-import { ConfigService } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { InjectRepository, TypeOrmModule } from '@nestjs/typeorm';
 import { IsOptional, IsString } from 'class-validator';
 import { Repository } from 'typeorm';
 
 import { User } from '../database/entities';
+import { SupabaseAuthService } from './supabase-auth.service';
 
 /** 게스트 로그인 요청 (닉네임 선택) */
 export class GuestLoginDto {
+  @ApiProperty({ required: false, example: '지민' })
+  @IsOptional()
+  @IsString()
+  nickname?: string;
+}
+
+/** Supabase 로그인 요청 — 앱이 Supabase Auth에서 받은 세션 액세스 토큰을 그대로 전달. */
+export class SupabaseLoginDto {
+  @ApiProperty({ example: 'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9...' })
+  @IsString()
+  access_token: string;
+
+  /** 최초 가입 시에만 사용(기존 계정이면 저장된 닉네임을 그대로 씀). */
   @ApiProperty({ required: false, example: '지민' })
   @IsOptional()
   @IsString()
@@ -37,6 +57,7 @@ export interface TokenPayload {
 export class AuthService {
   constructor(
     private readonly config: ConfigService,
+    private readonly supabaseAuth: SupabaseAuthService,
     @InjectRepository(User) private readonly users: Repository<User>,
   ) {}
 
@@ -87,6 +108,40 @@ export class AuthService {
     const token = this.sign({ sub: userId, nickname: nick, iat: now, exp: now + ttlMs });
     return { user_id: userId, nickname: nick, token };
   }
+
+  /**
+   * Supabase 로그인 — 같은 Supabase 계정으로 다시 오면 같은 user_id를 재발급해
+   * RunSession·ScenarioStore가 이어진다(둘 다 user_id로 키를 잡으므로 이거면 충분).
+   */
+  async supabase(accessToken: string, nickname?: string) {
+    const verified = await this.supabaseAuth.verify(accessToken);
+    if (!verified) throw new UnauthorizedException('유효하지 않거나 만료된 Supabase 토큰입니다.');
+
+    const now = Date.now();
+    const ttlMs = (this.config.get<number>('authTokenTtlSec') ?? 2592000) * 1000;
+
+    let user = await this.users.findOne({ where: { supabase_id: verified.supabaseId } });
+    if (!user) {
+      const userId = `sb_${randomUUID().slice(0, 8)}`;
+      const nick = nickname?.trim() || verified.email?.split('@')[0] || '탐험가';
+      user = await this.users.save(
+        this.users.create({
+          user_id: userId,
+          nickname: nick,
+          exp: 0,
+          supabase_id: verified.supabaseId,
+        }),
+      );
+    }
+
+    const token = this.sign({
+      sub: user.user_id,
+      nickname: user.nickname,
+      iat: now,
+      exp: now + ttlMs,
+    });
+    return { user_id: user.user_id, nickname: user.nickname, token };
+  }
 }
 
 @ApiTags('auth')
@@ -99,12 +154,26 @@ export class AuthController {
   guest(@Body() dto: GuestLoginDto) {
     return this.auth.guest(dto.nickname);
   }
+
+  /** Supabase 로그인 — 같은 계정이면 이전 진행도로 이어진다 */
+  @Post('supabase')
+  supabase(@Body() dto: SupabaseLoginDto) {
+    return this.auth.supabase(dto.access_token, dto.nickname);
+  }
 }
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User])],
+  imports: [
+    TypeOrmModule.forFeature([User]),
+    HttpModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      // JWKS는 Supabase 자체 응답이라 AI 호출보다 훨씬 빨리 끝난다 — 넉넉히 10초.
+      useFactory: () => ({ timeout: 10_000, maxRedirects: 0 }),
+    }),
+  ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, SupabaseAuthService],
   exports: [AuthService],
 })
 export class AuthModule {}

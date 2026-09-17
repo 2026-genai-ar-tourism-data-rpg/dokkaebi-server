@@ -29,6 +29,10 @@ export class User {
   @Column({ type: 'varchar', length: 64 })
   nickname: string;
 
+  /** Supabase Auth user id(uuid). 게스트는 null — 로그인해야 이어하기가 가능하다. */
+  @Column({ type: 'varchar', length: 64, nullable: true, unique: true })
+  supabase_id: string | null;
+
   /** 누적 경험치 — 조각 획득·완주 보상으로 증가. */
   @Column({ type: 'int', default: 0 })
   exp: number;
