@@ -38,6 +38,7 @@ interface QuestRules {
   speedCheckMinIntervalSec: number;
   expPerFragment: number;
   expFinaleBonus: number;
+  adminNicknames: string[];
 }
 
 /** GPS 인증 거절 사유 — 앱이 안내 문구를 고르는 데 쓴다. */
@@ -135,6 +136,7 @@ export class QuestService {
    */
   async verifyLocation(
     userId: string,
+    nickname: string,
     runId: string,
     nodeId: string,
     lat: number,
@@ -142,6 +144,7 @@ export class QuestService {
     accuracyM?: number,
   ) {
     const r = this.rules;
+    const isAdmin = r.adminNicknames.includes(nickname);
     const run = await this.ownedRun(userId, runId);
     const scenario = await this.store.get(run.scenario_id);
     const node = this.store.node(scenario, nodeId);
@@ -162,33 +165,37 @@ export class QuestService {
       return reject('NODE_HAS_NO_COORDS', Number.NaN);
     }
     const target = { lat: node.map_y, lng: node.map_x };
+    const { within, distanceM } = isWithinRadius(player, target, radiusM, accuracyM ?? 0);
 
-    // GPS 정확도가 반경보다 한참 나쁘면 보류 — 실내·터널 오인증 방지.
-    if (typeof accuracyM === 'number' && accuracyM > r.gpsAccuracyMaxM) {
-      return reject('LOW_ACCURACY', Number.NaN);
-    }
+    // 관리자 계정(닉네임이 QUEST_ADMIN_NICKNAMES에 있음): 현장 밖 반복 테스트용
+    // — 정확도·스푸핑·반경 판정을 전부 건너뛴다. 방문 기록·보상은 그대로 진행.
+    if (!isAdmin) {
+      // GPS 정확도가 반경보다 한참 나쁘면 보류 — 실내·터널 오인증 방지.
+      if (typeof accuracyM === 'number' && accuracyM > r.gpsAccuracyMaxM) {
+        return reject('LOW_ACCURACY', Number.NaN);
+      }
 
-    // 스푸핑: 직전 fix 대비 이동속도가 비현실적이면 거절.
-    const now = Date.now();
-    const last = await this.redis.getLastFix(userId);
-    if (last) {
-      const elapsedSec = (now - last.atMs) / 1000;
-      if (elapsedSec >= r.speedCheckMinIntervalSec) {
-        const v = speedMps({ lat: last.lat, lng: last.lng }, player, elapsedSec);
-        if (v !== null && v > r.maxSpeedMps) {
-          this.logger.warn(
-            `스푸핑 의심 user=${userId} ${v.toFixed(1)}m/s > ${r.maxSpeedMps}m/s`,
-          );
-          await this.redis.setLastFix(userId, { lat, lng, atMs: now }, r.lastFixTtlSec);
-          return reject('IMPOSSIBLE_SPEED', isWithinRadius(player, target, radiusM).distanceM);
+      // 스푸핑: 직전 fix 대비 이동속도가 비현실적이면 거절.
+      const now = Date.now();
+      const last = await this.redis.getLastFix(userId);
+      if (last) {
+        const elapsedSec = (now - last.atMs) / 1000;
+        if (elapsedSec >= r.speedCheckMinIntervalSec) {
+          const v = speedMps({ lat: last.lat, lng: last.lng }, player, elapsedSec);
+          if (v !== null && v > r.maxSpeedMps) {
+            this.logger.warn(
+              `스푸핑 의심 user=${userId} ${v.toFixed(1)}m/s > ${r.maxSpeedMps}m/s`,
+            );
+            await this.redis.setLastFix(userId, { lat, lng, atMs: now }, r.lastFixTtlSec);
+            return reject('IMPOSSIBLE_SPEED', distanceM);
+          }
         }
       }
-    }
-    await this.redis.setLastFix(userId, { lat, lng, atMs: now }, r.lastFixTtlSec);
+      await this.redis.setLastFix(userId, { lat, lng, atMs: now }, r.lastFixTtlSec);
 
-    // 반경 판정 — GPS 오차 반경만큼은 관대하게 본다.
-    const { within, distanceM } = isWithinRadius(player, target, radiusM, accuracyM ?? 0);
-    if (!within) return reject('OUT_OF_RANGE', distanceM);
+      // 반경 판정 — GPS 오차 반경만큼은 관대하게 본다.
+      if (!within) return reject('OUT_OF_RANGE', distanceM);
+    }
 
     // 방문 기록(재인증은 갱신 없이 무시 — 이미 인증된 노드).
     await this.visits

@@ -41,6 +41,12 @@ export default () => ({
     // 보상: 조각 1개당 경험치 / 시나리오 완주(피날레) 보너스.
     expPerFragment: parseInt(process.env.QUEST_EXP_PER_FRAGMENT ?? '100', 10),
     expFinaleBonus: parseInt(process.env.QUEST_EXP_FINALE_BONUS ?? '500', 10),
+    // 이 닉네임으로 게스트 로그인하면 GPS 판정(정확도·스푸핑·반경)을 전부
+    // 통과시킨다 — 현장 밖에서 반복 테스트하기 위한 전용 계정. 콤마 구분.
+    adminNicknames: (process.env.QUEST_ADMIN_NICKNAMES ?? 'admin,관리자')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
   },
 
   // ── 분기 대화 ──────────────────────────────────────────────
