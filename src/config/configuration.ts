@@ -18,6 +18,9 @@ export default () => ({
   authSecret: process.env.AUTH_SECRET ?? 'dev-secret-change-me',
   // 토큰 유효기간(초). 기본 30일 — 게스트가 여행 중 재로그인하지 않도록 넉넉히.
   authTokenTtlSec: parseInt(process.env.AUTH_TOKEN_TTL_SEC ?? '2592000', 10),
+  // Supabase Auth 프로젝트 URL — 세션 토큰 서명 검증용 JWKS를 여기서 받아온다.
+  // 비밀키가 아니라 공개 URL이라 서버가 별도 비밀 없이 자체 검증 가능(비대칭 서명).
+  supabaseUrl: process.env.SUPABASE_URL ?? '',
   // 게임서버 → AI 백엔드(dokkaebi-ai) 내부 호출 (compose 네트워크에선 http://ai:8001)
   // ⚠️ localhost 대신 127.0.0.1 — Node가 localhost를 IPv6(::1)로 풀어 uvicorn(IPv4)과
   //    어긋나 AggregateError(ECONNREFUSED)가 나는 것 방지.
@@ -41,6 +44,12 @@ export default () => ({
     // 보상: 조각 1개당 경험치 / 시나리오 완주(피날레) 보너스.
     expPerFragment: parseInt(process.env.QUEST_EXP_PER_FRAGMENT ?? '100', 10),
     expFinaleBonus: parseInt(process.env.QUEST_EXP_FINALE_BONUS ?? '500', 10),
+    // 이 닉네임으로 게스트 로그인하면 GPS 판정(정확도·스푸핑·반경)을 전부
+    // 통과시킨다 — 현장 밖에서 반복 테스트하기 위한 전용 계정. 콤마 구분.
+    adminNicknames: (process.env.QUEST_ADMIN_NICKNAMES ?? 'admin,관리자')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
   },
 
   // ── 분기 대화 ──────────────────────────────────────────────
