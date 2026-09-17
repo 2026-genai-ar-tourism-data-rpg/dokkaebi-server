@@ -46,7 +46,15 @@ export class QuestController {
     @Param('nodeId') nodeId: string,
     @Body() dto: LocationVerifyDto,
   ) {
-    return this.quest.verifyLocation(user.sub, runId, nodeId, dto.lat, dto.lng, dto.accuracy_m);
+    return this.quest.verifyLocation(
+      user.sub,
+      user.nickname,
+      runId,
+      nodeId,
+      dto.lat,
+      dto.lng,
+      dto.accuracy_m,
+    );
   }
 
   /** AR 기억석 조각 획득 (GPS 인증·requires 통과 필요) */
