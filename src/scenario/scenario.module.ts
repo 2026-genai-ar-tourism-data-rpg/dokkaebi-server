@@ -12,6 +12,10 @@
 //            그렇게 유실돼 4인 예산이 계속 1인 기준으로 계산되고 있었다.
 //            AI ScenarioGenRequest와 1:1 유지 — 한쪽만 늘리면 그 필드는 없는 것과 같다.
 // 구현일: 2026-08-18 | 작성: kys (explore-input-wiring/kys/v1)
+// ------------------------------------------------------------
+// [v3] wishlist_only 통과 — 앱 위시리스트 '코스 생성'은 고른 장소로만 만든다(AI ScenarioGenRequest v7).
+//      whitelist:true라 DTO에 없으면 AI까지 못 간다.
+// 구현일: 2026-09-19 | 작성: ljs (wishlist-only/ljs/v1)
 // ============================================================
 import { Body, Controller, Get, Injectable, Logger, Module, Post, Query } from '@nestjs/common';
 import { ApiProperty, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -100,6 +104,9 @@ export class GenerateScenarioDto {
   // 갈림길(route 분기) 생성 여부. 전역 ValidationPipe가 whitelist:true라
   // 여기 없는 필드는 AI로 프록시되기 전에 조용히 잘려나간다 → 반드시 선언할 것(#6).
   @ApiProperty({ required: false }) @IsOptional() @IsBoolean() with_branching?: boolean;
+
+  // 위시 장소로만 코스 구성(거리순 채움·샛길·식음·갈림길 없음) — 앱 퀘스트 탭 위시리스트 '코스 생성'.
+  @ApiProperty({ required: false }) @IsOptional() @IsBoolean() wishlist_only?: boolean;
 }
 
 /** 시나리오 생성. 입력 검증 → AI 백엔드 위임(노드선택·조립·대사) → 영속. */
