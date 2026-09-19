@@ -4,6 +4,9 @@
 // 구현(요약): 실제 Postgres에 앱을 띄우고 HTTP로 검증. AI 호출 없음(시나리오는 직접 적재).
 //            v1이 통과시키던 것들(고정 유저·빈 지도·없는 코드 입장)이 막히는지가 핵심.
 // 구현일: 2026-08-04 | 작성: kys (core-modules/kys/v1)
+// ------------------------------------------------------------
+// [v2] /me 레벨·등급 = 굿 엔딩 코스 수(같은 코스는 한 번) — 경험치로는 오르지 않는다.
+// 구현일: 2026-09-19 | 작성: ljs (ending-level/ljs/v1)
 // ============================================================
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -14,7 +17,7 @@ import { Repository } from 'typeorm';
 
 import { AuthModule } from '../src/auth/auth.module';
 import configuration from '../src/config/configuration';
-import { ENTITIES, Scenario, User } from '../src/database/entities';
+import { ENTITIES, QuestRun, Scenario, User } from '../src/database/entities';
 import { MapModule } from '../src/map/map.module';
 import { PartyModule } from '../src/party/party.module';
 import { UserModule } from '../src/user/user.module';
@@ -50,6 +53,7 @@ describe('user·map·party 실구현 (#8)', () => {
   let app: INestApplication;
   let scenarios: Repository<Scenario>;
   let users: Repository<User>;
+  let runs: Repository<QuestRun>;
   let token: string;
   let userId: string;
 
@@ -76,6 +80,7 @@ describe('user·map·party 실구현 (#8)', () => {
     await app.init();
 
     scenarios = moduleRef.get(getRepositoryToken(Scenario));
+    runs = moduleRef.get(getRepositoryToken(QuestRun));
     users = moduleRef.get(getRepositoryToken(User));
 
     const res = await request(app.getHttpServer())
@@ -105,15 +110,35 @@ describe('user·map·party 실구현 (#8)', () => {
       expect(res.body.exp).toBe(0);
       expect(res.body.level).toBe(1);
       expect(res.body.tier).toBe('초급 탐사자');
+      expect(res.body.good_endings).toBe(0);
+      expect(res.body.next_level_at).toBe(1);
     });
 
-    it('경험치가 오르면 레벨·등급이 따라 오른다', async () => {
-      await users.update({ user_id: userId }, { exp: 5000 }); // 500/레벨 → 11레벨
+    it('굿 엔딩 코스가 쌓이면 레벨·등급이 오른다 — 같은 코스·노멀 엔딩은 세지 않는다', async () => {
+      const done = (scenario_id: string, ending: string) =>
+        runs.save(runs.create({ user_id: userId, scenario_id, state: 'COMPLETED', ending }));
+      await done('scn_a', 'good');
+      await done('scn_a', 'good');   // 같은 코스를 다시 굿 엔딩 — 한 번만
+      await done('scn_b', 'normal'); // 노멀 엔딩 — 세지 않음
+      await done('scn_c', 'good');
+      await done('scn_d', 'good');
+
+      const res = await request(app.getHttpServer())
+        .get('/v1/me').set(auth()).expect(200);
+      expect(res.body.good_endings).toBe(3);
+      expect(res.body.level).toBe(3);             // 누적 1·3·6… → 3번이면 Lv.3
+      expect(res.body.tier).toBe('중급 탐사자');
+      expect(res.body.next_level_at).toBe(6);
+      await runs.delete({ user_id: userId });     // 원복
+    });
+
+    it('경험치가 많아도 레벨은 오르지 않는다', async () => {
+      await users.update({ user_id: userId }, { exp: 5000 });
       const res = await request(app.getHttpServer())
         .get('/v1/me').set(auth()).expect(200);
 
-      expect(res.body.level).toBe(11);
-      expect(res.body.tier).toBe('숙련 탐사자');
+      expect(res.body.exp).toBe(5000);
+      expect(res.body.level).toBe(1);
       await users.update({ user_id: userId }, { exp: 0 });    // 원복
     });
 

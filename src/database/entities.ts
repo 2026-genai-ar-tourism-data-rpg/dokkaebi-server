@@ -5,6 +5,9 @@
 //            노드 GPS 방문 기록, 조각 획득(중복 방지 유니크), 도깨비 도감 수집.
 //            조각·방문은 run 단위라 같은 시나리오를 다시 플레이하면 처음부터 시작된다.
 // 구현일: 2026-08-02 | 작성: kys (quest-api/kys/v1) · 이슈 #8
+// ------------------------------------------------------------
+// [v2] QuestRun.ending — 피날레에서 고른 엔딩(good|normal). 굿 엔딩 코스 수가 레벨이 된다.
+// 구현일: 2026-09-19 | 작성: ljs (ending-level/ljs/v1)
 // ============================================================
 import {
   Column,
@@ -100,6 +103,10 @@ export class QuestRun {
   // ⚠️ 타입 명시 필수 — `Date | null` 유니온은 리플렉션이 Object로 읽어 매핑에 실패한다.
   @Column({ type: 'timestamp', nullable: true })
   completed_at: Date | null;
+
+  /** 피날레에서 고른 엔딩(good|normal). 지역을 복원하며 끝낸 run만 채운다 — 굿 엔딩 코스 수가 레벨. */
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  ending: string | null;
 }
 
 /** 노드 GPS 인증 기록. 조각 획득의 전제조건(미인증 노드에선 획득 불가). */

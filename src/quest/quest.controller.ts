@@ -6,6 +6,9 @@
 //            questId 하나로는 '어느 플레이의 어느 노드'인지 알 수 없어 판정이 불가능했다(#8).
 //            대화 프록시는 노드 단위라 그대로 유지.
 // 구현일: 2026-06-10 (run 기반 재설계: 2026-08-02) | 작성: kys (base-pipeline/kys/v1)
+// ------------------------------------------------------------
+// [v3] 노드 완료에 ending(피날레 엔딩)을 넘긴다.
+// 구현일: 2026-09-19 | 작성: ljs (ending-level/ljs/v1)
 // ============================================================
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -75,7 +78,7 @@ export class QuestController {
     @Param('nodeId') nodeId: string,
     @Body() dto: CompleteNodeDto,
   ) {
-    return this.quest.complete(user.sub, runId, nodeId, dto.choice_id);
+    return this.quest.complete(user.sub, runId, nodeId, dto.choice_id, dto.ending);
   }
 
   /**

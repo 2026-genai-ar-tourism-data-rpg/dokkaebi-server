@@ -6,6 +6,10 @@
 //            v1 더미가 통과시키던 것들(반경 밖 인증·미인증 획득·중복 획득·보상 재지급)이
 //            실제로 막히는지가 이 파일의 존재 이유다.
 // 구현일: 2026-08-02 | 작성: kys (quest-api/kys/v1)
+// ------------------------------------------------------------
+// [v2] 피날레 엔딩 기록·레벨업 — 굿 엔딩으로 복원하면 Lv.2 레벨업, 재호출은 다시 오르지 않음,
+//      엔딩 값은 good|normal만.
+// 구현일: 2026-09-19 | 작성: ljs (ending-level/ljs/v1)
 // ============================================================
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -300,13 +304,22 @@ describe('게임 루프 E2E (#8)', () => {
       .send({})
       .expect(201);
 
+    await request(app.getHttpServer())
+      .post(`/v1/runs/${runId}/nodes/${N2.id}/complete`)
+      .set(auth())
+      .send({ ending: 'best' })
+      .expect(400); // 엔딩은 good|normal만
+
     const res = await request(app.getHttpServer())
       .post(`/v1/runs/${runId}/nodes/${N2.id}/complete`)
       .set(auth())
-      .send({})
+      .send({ ending: 'good' })
       .expect(201);
 
     expect(res.body.region_restored).toBe(true);
+    expect(res.body.level_up).toBe(true); // 첫 굿 엔딩 → Lv.2
+    expect(res.body.level).toBe(2);
+    expect(res.body.tier).toBe('초급 탐사자');
     expect(res.body.titles).toContain('종로의 기억을 되찾은 자');
     expect(res.body.exp_gained).toBe(600); // 조각 100 + 피날레 보너스 500
 
@@ -316,6 +329,15 @@ describe('게임 루프 E2E (#8)', () => {
       .expect(200);
     expect(run.body.state).toBe('COMPLETED');
     expect(run.body.progress).toBe(2);
+
+    // 기록 재시도(재호출) — 이미 남긴 엔딩이라 다시 오르지 않는다.
+    const again = await request(app.getHttpServer())
+      .post(`/v1/runs/${runId}/nodes/${N2.id}/complete`)
+      .set(auth())
+      .send({ ending: 'good' })
+      .expect(201);
+    expect(again.body.level_up).toBe(false);
+    expect(again.body.level).toBe(2);
   });
 
   it('⑬ 남의 플레이 기록은 조회·조작할 수 없다', async () => {
