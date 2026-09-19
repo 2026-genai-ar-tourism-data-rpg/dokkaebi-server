@@ -4,9 +4,12 @@
 // 구현(요약): DB에서 경험치·레벨·등급·도감 수·조각 진행도를 실제로 집계한다.
 //            v1은 전부 고정값(u_demo/level 1/exp 0)이라 누가 로그인해도 같은 화면이었다.
 // 구현일: 2026-06-10 (실구현: 2026-08-04) | 작성: kys (base-pipeline/kys/v1) · 이슈 #8
+// ------------------------------------------------------------
+// [v3] 레벨·등급을 경험치 대신 굿 엔딩 코스 수로(src/user/level.ts) + good_endings·next_level_at.
+//      경험치는 그대로 쌓고 보여 주지만 레벨 계산엔 쓰지 않는다.
+// 구현일: 2026-09-19 | 작성: ljs (ending-level/ljs/v1)
 // ============================================================
 import { Controller, Get, Injectable, Module, NotFoundException, UseGuards } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { InjectRepository, TypeOrmModule } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,40 +17,18 @@ import { Repository } from 'typeorm';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { AuthModule, TokenPayload } from '../auth/auth.module';
 import { DexEntry, FragmentCollect, QuestRun, Scenario, User } from '../database/entities';
-
-/**
- * 탐사 등급 — 레벨 구간별 호칭. 기획 문구라 코드 상수로 둔다(수치는 config).
- * 위에서부터 처음 걸리는 것을 쓴다(내림차순 유지 필수).
- */
-const TIERS: ReadonlyArray<{ minLevel: number; name: string }> = [
-  { minLevel: 20, name: '기억의 수호자' },
-  { minLevel: 10, name: '숙련 탐사자' },
-  { minLevel: 5, name: '중급 탐사자' },
-  { minLevel: 1, name: '초급 탐사자' },
-];
+import { countGoodEndings, goodEndingsForLevel, levelOfGoodEndings, tierOf } from './level';
 
 /** 유저 진행 데이터 (UserProgress). */
 @Injectable()
 export class UserService {
   constructor(
-    private readonly config: ConfigService,
     @InjectRepository(User) private readonly users: Repository<User>,
     @InjectRepository(DexEntry) private readonly dex: Repository<DexEntry>,
     @InjectRepository(QuestRun) private readonly runs: Repository<QuestRun>,
     @InjectRepository(FragmentCollect) private readonly fragments: Repository<FragmentCollect>,
     @InjectRepository(Scenario) private readonly scenarios: Repository<Scenario>,
   ) {}
-
-  /** 경험치 → 레벨(1-base). config.progression.expPerLevel 기준. */
-  private levelOf(exp: number): number {
-    const per = this.config.get<number>('progression.expPerLevel') ?? 500;
-    return Math.floor(exp / per) + 1;
-  }
-
-  /** 레벨 → 탐사 등급 호칭. */
-  private tierOf(level: number): string {
-    return TIERS.find((t) => level >= t.minLevel)?.name ?? TIERS[TIERS.length - 1].name;
-  }
 
   /**
    * 내 진행 상태 — 경험치·레벨·도감·조각 진행도를 실제 DB에서 집계.
@@ -59,8 +40,6 @@ export class UserService {
   async me(userId: string) {
     const user = await this.users.findOne({ where: { user_id: userId } });
     if (!user) throw new NotFoundException('유저를 찾을 수 없느니라.');
-
-    const level = this.levelOf(user.exp);
 
     const [dexCount, runs] = await Promise.all([
       this.dex.count({ where: { user_id: userId } }),
@@ -81,14 +60,18 @@ export class UserService {
     }
 
     const completedRuns = runs.filter((r) => r.state === 'COMPLETED').length;
+    const goodEndings = countGoodEndings(runs);
+    const level = levelOfGoodEndings(goodEndings);
     // 방문률 = 완주한 코스 / 시작한 코스(%). 시작한 게 없으면 0.
     const visitRate = runs.length > 0 ? Math.round((completedRuns / runs.length) * 100) : 0;
 
     return {
       user_id: user.user_id,
       nickname: user.nickname,
-      tier: this.tierOf(level),
+      tier: tierOf(level),
       level,
+      good_endings: goodEndings,                   // 굿 엔딩으로 끝낸 코스 수(같은 코스는 한 번)
+      next_level_at: goodEndingsForLevel(level + 1), // 다음 레벨에 필요한 누적 굿 엔딩 수
       exp: user.exp,
       visit_rate: visitRate,
       dex_count: dexCount,

@@ -4,6 +4,9 @@
 // 구현(요약): PORT/DB/Redis/AI URL + 게임 룰 상수(GPS 판정·스푸핑·보상) 로드.
 //            ConfigModule.forRoot(load)에 주입. 매직넘버는 전부 여기로 모은다.
 // 구현일: 2026-06-10 (게임 룰 상수 추가: 2026-08-02) | 작성: kys (base-pipeline/kys/v1)
+// ------------------------------------------------------------
+// [v3] progression.expPerLevel 제거 — 레벨은 경험치가 아니라 굿 엔딩 코스 수로 정한다(src/user/level.ts).
+// 구현일: 2026-09-19 | 작성: ljs (ending-level/ljs/v1)
 // ============================================================
 
 /** env -> 타입 설정 객체. 매직넘버·URL은 전부 여기로. */
@@ -60,12 +63,6 @@ export default () => ({
     turnTtlSec: parseInt(process.env.DIALOGUE_TURN_TTL_SEC ?? '3600', 10),
     // 한 노드에서 허용할 최대 턴. 초과분은 AI가 수렴시키도록 그대로 올려 보낸다.
     maxTurns: parseInt(process.env.DIALOGUE_MAX_TURNS ?? '3', 10),
-  },
-
-  // ── 성장(레벨·등급) ────────────────────────────────────────
-  progression: {
-    // 레벨 1칸에 필요한 경험치. 조각 5개 완주 = 1000exp ≈ 2레벨.
-    expPerLevel: parseInt(process.env.PROGRESSION_EXP_PER_LEVEL ?? '500', 10),
   },
 
   // ── 파티(멀티) ─────────────────────────────────────────────

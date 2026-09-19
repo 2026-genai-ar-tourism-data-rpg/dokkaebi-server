@@ -3,9 +3,14 @@
 // pipeline: 게임 백엔드 / 퀘스트 (계약)
 // 구현(요약): run 시작·GPS인증·대화·조각획득·완료 DTO. class-validator로 검증.
 // 구현일: 2026-06-10 (run/complete 추가: 2026-08-02) | 작성: kys (base-pipeline/kys/v1)
+// ------------------------------------------------------------
+// [v3] CompleteNodeDto.ending — 피날레에서 고른 엔딩(good|normal). 다른 값은 400.
+// 구현일: 2026-09-19 | 작성: ljs (ending-level/ljs/v1)
 // ============================================================
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
+
+import { Ending } from '../../user/level';
 
 /** 플레이 시작 요청 — 어떤 시나리오를 돌지. */
 export class StartRunDto {
@@ -35,4 +40,9 @@ export class CompleteNodeDto {
   @IsOptional()
   @IsString()
   choice_id?: string;
+
+  @ApiProperty({ required: false, enum: ['good', 'normal'], description: '피날레에서 고른 엔딩 — 굿 엔딩 코스 수가 레벨' })
+  @IsOptional()
+  @IsIn(['good', 'normal'])
+  ending?: Ending;
 }

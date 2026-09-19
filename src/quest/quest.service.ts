@@ -6,6 +6,10 @@
 //            v1은 전부 더미 반환이라 5km 밖에서도 인증됐다(이슈 #8).
 //            조각 중복 방지는 DB 유니크 제약 단독 — 근거는 collectFragment 주석 참고.
 // 구현일: 2026-06-10 (실구현: 2026-08-02 · 중복방지 일원화: 2026-08-04) | 작성: kys
+// ------------------------------------------------------------
+// [v3] 피날레 엔딩 기록 + 레벨 — 지역을 복원하며 끝낸 첫 완료에 ending(good|normal)을 run에 남기고,
+//      응답에 level·tier·level_up(굿 엔딩 코스 수 기준, src/user/level.ts)을 싣는다.
+// 구현일: 2026-09-19 | 작성: ljs (ending-level/ljs/v1)
 // ============================================================
 import {
   BadRequestException,
@@ -28,6 +32,7 @@ import {
 } from '../database/entities';
 import { RedisService } from '../redis/redis.service';
 import { ScenarioNode, ScenarioStore } from '../scenario/scenario.store';
+import { Ending, countGoodEndings, levelOfGoodEndings, tierOf } from '../user/level';
 
 /** config.quest 형태 — 판정 수치 단일 소스. */
 interface QuestRules {
@@ -313,8 +318,9 @@ export class QuestService {
    * 조각을 획득한 노드만 완료할 수 있다. 보상(경험치·도감)은 한 트랜잭션으로 지급하고,
    * 피날레에서 조각을 전부 모았으면 run을 COMPLETED로 닫는다.
    * choiceId를 주면 분기 선택으로 기록해 next_node_id 산출에 반영한다.
+   * ending(피날레 엔딩)은 지역을 복원하며 끝낸 첫 완료에만 run에 남긴다 — 굿 엔딩 코스 수가 레벨이다.
    */
-  async complete(userId: string, runId: string, nodeId: string, choiceId?: string) {
+  async complete(userId: string, runId: string, nodeId: string, choiceId?: string, ending?: Ending) {
     const r = this.rules;
     const run = await this.ownedRun(userId, runId);
     const scenario = await this.store.get(run.scenario_id);
@@ -363,6 +369,15 @@ export class QuestService {
       ? 0
       : (fragmentId ? r.expPerFragment : 0) + (regionRestored ? r.expFinaleBonus : 0);
 
+    // 레벨업 판정 — 이 완료 전의 굿 엔딩 코스 수와 비교한다. 재호출이면 엔딩을 다시 남기지 않는다.
+    const runsBefore = await this.runs.find({ where: { user_id: userId } });
+    const recordedEnding = regionRestored && !alreadyRewarded ? ending ?? null : null;
+    const goodBefore = countGoodEndings(runsBefore);
+    const goodAfter = recordedEnding === 'good'
+      ? countGoodEndings([...runsBefore, { scenario_id: run.scenario_id, ending: 'good' }])
+      : goodBefore;
+    const level = levelOfGoodEndings(goodAfter);
+
     if (!alreadyRewarded) {
       await this.dataSource.transaction(async (tx) => {
         if (expGained > 0) {
@@ -387,6 +402,7 @@ export class QuestService {
           await tx.update(QuestRun, { run_id: runId }, {
             state: 'COMPLETED',
             completed_at: new Date(),
+            ...(recordedEnding ? { ending: recordedEnding } : {}),
           });
         }
       });
@@ -401,6 +417,9 @@ export class QuestService {
       dex_entry: node.npc?.name ?? null,
       titles: regionRestored ? [`${scenario.region}의 기억을 되찾은 자`] : [],
       region_restored: regionRestored,
+      level,
+      tier: tierOf(level),
+      level_up: level > levelOfGoodEndings(goodBefore), // 이번 굿 엔딩으로 레벨이 올랐나
       progress,
       required: total,
       next_node_id: this.store.nextNodeId(scenario, nodeId, {
